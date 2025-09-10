@@ -1,5 +1,19 @@
 # Getting Started with Create React App
 
+## Contact Form Configuration
+
+The contact form posts JSON to `REACT_APP_FORM_ENDPOINT` (Formspree compatible). To enable sending:
+
+1. Create a Formspree project (or any endpoint that accepts POST JSON).
+2. Copy the endpoint (e.g. `https://formspree.io/f/abcdwxyz`).
+3. Create a `.env` file in the project root:
+   ```env
+   REACT_APP_FORM_ENDPOINT=https://formspree.io/f/abcdwxyz
+   ```
+4. Restart the dev server (`npm start`).
+
+If no env var is provided it will POST to `https://formspree.io/f/` which will fail (used as a placeholder) and show an error message.
+
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
 ## Available Scripts

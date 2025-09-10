@@ -1,9 +1,51 @@
 import React, { useEffect, useState } from "react";
 import "./App.css";
 
+// Hero image component with robust path handling for GitHub Pages (subdirectory deploy)
+function HeroImage() {
+  const [src, setSrc] = useState(() => {
+    // Try relative path first (works after build inside same folder)
+    return "me.jpeg";
+  });
+  const tried = React.useRef(0);
+
+  return (
+    <img
+      src={src}
+      alt="Taha Ikram"
+      className="avatar"
+      loading="lazy"
+      onError={() => {
+        if (tried.current > 2) return;
+        tried.current += 1;
+        // Attempt alternative public URL patterns
+        const candidates = [
+          `${process.env.PUBLIC_URL || ""}/me.jpeg`, // with PUBLIC_URL prefix
+          `/my-portfolio/me.jpeg`, // explicit repo path
+          "/me.jpeg", // root (last resort)
+        ];
+        setSrc(candidates[tried.current - 1]);
+      }}
+    />
+  );
+}
+
 function App() {
   const [theme, setTheme] = useState(
     () => localStorage.getItem("theme") || "light"
+  );
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    message: "",
+  });
+  const [formState, setFormState] = useState({ status: "idle", error: null });
+  // Provide your actual Formspree (or other) endpoint in .env as REACT_APP_FORM_ENDPOINT
+  const FORM_ENDPOINT =
+    process.env.REACT_APP_FORM_ENDPOINT || "https://formspree.io/f/"; // placeholder base
+  // Simple heuristic: expect something like https://formspree.io/f/abcdwxyz (id 6-12+ chars)
+  const endpointConfigured = /https?:\/\/[^/]+\/f\/[a-zA-Z0-9]{4,}/.test(
+    FORM_ENDPOINT.trim()
   );
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -41,12 +83,7 @@ function App() {
       <section className="hero" role="banner">
         <div className="hero-inner">
           <div className="hero-image-wrapper">
-            <img
-              src="/me.jpeg"
-              alt="Taha Ikram"
-              className="avatar"
-              loading="lazy"
-            />
+            <HeroImage />
           </div>
           <div className="hero-copy">
             <h2>Building thoughtful digital experiences.</h2>
@@ -266,12 +303,78 @@ function App() {
         </p>
         <form
           className="contact-form"
-          onSubmit={(e) => e.preventDefault()}
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (formState.status === "submitting") return;
+            if (
+              !formData.name.trim() ||
+              !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email) ||
+              formData.message.trim().length < 5
+            ) {
+              setFormState({
+                status: "error",
+                error: "Please fill all fields correctly.",
+              });
+              return;
+            }
+            if (!endpointConfigured) {
+              setFormState({
+                status: "error",
+                error:
+                  "Form endpoint not configured. Add REACT_APP_FORM_ENDPOINT to .env",
+              });
+              return;
+            }
+            try {
+              setFormState({ status: "submitting", error: null });
+              const res = await fetch(FORM_ENDPOINT, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                },
+                body: JSON.stringify({
+                  ...formData,
+                  _subject: `Portfolio message from ${formData.name}`,
+                  source: "portfolio-contact-form",
+                }),
+              });
+              let payload = null;
+              try {
+                payload = await res.json();
+              } catch {
+                /* ignore parse */
+              }
+              if (!res.ok) {
+                const apiError =
+                  payload?.errors?.[0]?.message ||
+                  payload?.message ||
+                  "Service error";
+                throw new Error(apiError);
+              }
+              setFormState({ status: "success", error: null });
+              setFormData({ name: "", email: "", message: "" });
+            } catch (err) {
+              setFormState({
+                status: "error",
+                error: err.message || "Failed to send. Try again later.",
+              });
+            }
+          }}
           aria-label="Quick message form"
         >
           <div className="field">
             <label htmlFor="name">Name</label>
-            <input id="name" name="name" placeholder="Your name" />
+            <input
+              id="name"
+              name="name"
+              placeholder="Your name"
+              value={formData.name}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, name: e.target.value }))
+              }
+              required
+            />
           </div>
           <div className="field">
             <label htmlFor="email">Email</label>
@@ -280,6 +383,11 @@ function App() {
               type="email"
               name="email"
               placeholder="you@example.com"
+              value={formData.email}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, email: e.target.value }))
+              }
+              required
             />
           </div>
           <div className="field">
@@ -289,11 +397,40 @@ function App() {
               name="message"
               rows={4}
               placeholder="Say hello..."
+              value={formData.message}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, message: e.target.value }))
+              }
+              required
             />
           </div>
-          <button className="btn submit" type="submit">
-            Send (Coming Soon)
+          <button
+            className="btn submit"
+            type="submit"
+            disabled={formState.status === "submitting"}
+          >
+            {formState.status === "submitting"
+              ? "Sending..."
+              : formState.status === "success"
+              ? "Sent ✔"
+              : "Send Message"}
           </button>
+          {formState.status === "error" && (
+            <p className="form-msg error" role="alert">
+              {formState.error}
+            </p>
+          )}
+          {formState.status === "success" && (
+            <p className="form-msg success" role="status">
+              Message delivered! I will reply soon.
+            </p>
+          )}
+          {!endpointConfigured && formState.status === "idle" && (
+            <p className="form-msg error" role="alert">
+              Set REACT_APP_FORM_ENDPOINT in .env (e.g.
+              https://formspree.io/f/abcdwxyz).
+            </p>
+          )}
         </form>
       </section>
 
